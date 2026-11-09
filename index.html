@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>關西青春漫遊記・Kansai Trip</title>
+  
+  <!-- PWA & Mobile Web App Meta -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="關西漫遊記">
+  <meta name="theme-color" content="#FFFDF9">
+
+  <!-- Vue 3 & Tailwind CSS CDN -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            cream: {
+              50: '#FFFEFA',
+              100: '#FFFDF9',
+              200: '#FBF7EE',
+              300: '#F6EEDB',
+              400: '#E8DCBE',
+              500: '#D5C39B'
+            },
+            warm: {
+              dark: '#3E342B',
+              brown: '#5C4E3D',
+              muted: '#8C7D6B',
+              accent: '#E07A5F',
+              green: '#819870',
+              blue: '#5B8296'
+            }
+          },
+          fontFamily: {
+            sans: ['"Zen Maru Gothic"', '"Noto Sans TC"', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background-color: #FBF7EE;
+      color: #3E342B;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .drag-item {
+      cursor: grab;
+      touch-action: pan-y;
+    }
+    .drag-item:active {
+      cursor: grabbing;
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-24 font-sans">
+  <div id="app" class="max-w-md mx-auto min-h-screen bg-cream-100 shadow-xl relative flex flex-col justify-between">
+    
+    <!-- 頂部導航列 (青春活力日系風 + 回飯店按鈕) -->
+    <header class="sticky top-0 z-30 bg-cream-100/90 backdrop-blur-md border-b border-cream-300 px-4 pt-4 pb-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <span class="text-2xl animate-bounce">🍁</span>
+          <div>
+            <h1 class="text-lg font-bold tracking-wider text-warm-dark flex items-center gap-1.5">
+              關西青春漫遊記
+              <span class="text-xs bg-warm-accent/15 text-warm-accent px-2 py-0.5 rounded-full font-medium">4D3N</span>
+            </h1>
+            <p class="text-[11px] text-warm-muted">大阪・神戶・姬路・USJ 冒險</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1.5">
+          <!-- 回飯店一鍵導航按鈕 -->
+          <button @click="navigateHotel" 
+                  class="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-cream-200 border border-cream-400 text-warm-brown text-xs font-medium hover:bg-cream-300 active:scale-95 transition-all shadow-sm"
+                  title="一鍵導航回大阪阪急龍仕柏飯店">
+            <span>🏨</span>
+            <span>回飯店</span>
+          </button>
+
+          <!-- 購物清單開關 -->
+          <button @click="activeModal = 'shopping'" class="p-2 rounded-full hover:bg-cream-200 text-warm-brown transition relative">
+            <span class="text-lg">🛍️</span>
+            <span v-if="shoppingList.filter(i => !i.done).length > 0" 
+                  class="absolute top-1 right-1 w-2 h-2 bg-warm-accent rounded-full animate-ping"></span>
+          </button>
+
+          <!-- 一鍵重設行程按鈕 -->
+          <button @click="resetToDefault" title="一鍵重設行程" class="p-2 rounded-full hover:bg-cream-200 text-warm-muted transition">
+            <span class="text-base">↺</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 橫向滑動天數切換籤頁 (App原生感) -->
+      <div class="flex space-x-2.5 overflow-x-auto no-scrollbar pt-3 pb-1">
+        <button 
+          v-for="(day, index) in days" 
+          :key="index"
+          @click="currentDayIndex = index"
+          :class="[
+            'flex-shrink-0 px-3.5 py-2 rounded-2xl text-left transition-all duration-200 flex flex-col',
+            currentDayIndex === index 
+              ? 'bg-warm-dark text-white shadow-md shadow-warm-dark/20 scale-[1.02]' 
+              : 'bg-cream-200 text-warm-brown hover:bg-cream-300 border border-cream-300'
+          ]">
+          <span class="text-[10px] font-bold tracking-widest opacity-80 uppercase">{{ day.dayCode }}</span>
+          <span class="text-xs font-semibold whitespace-nowrap">{{ day.shortDate }} ({{ day.weekday }})</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 主要內容區 -->
+    <main class="p-4 space-y-4 flex-1">
+      
+      <!-- 當日概覽卡片（含天氣資訊） -->
+      <div class="bg-gradient-to-br from-cream-50 to-cream-200 p-4 rounded-3xl border border-cream-300/80 shadow-sm">
+        <div class="flex justify-between items-start">
+          <div class="space-y-1">
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-cream-300 text-warm-brown text-[11px] font-medium">
+              <span>📍</span> {{ currentDay.city }}
+            </div>
+            <h2 class="text-base font-bold text-warm-dark leading-snug">{{ currentDay.title }}</h2>
+          </div>
+
+          <!-- 即時天氣卡片 -->
+          <div class="bg-cream-100/90 border border-cream-300/70 px-3 py-1.5 rounded-2xl text-center shadow-xs">
+            <div class="text-lg">{{ currentDay.weather.icon }}</div>
+            <div class="text-xs font-bold text-warm-dark">{{ currentDay.weather.temp }}</div>
+            <div class="text-[9px] text-warm-muted">{{ currentDay.weather.desc }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 行程列表工具列 -->
+      <div class="flex items-center justify-between px-1">
+        <h3 class="text-sm font-bold text-warm-brown flex items-center gap-1.5">
+          <span>🕒</span> 行程時間表
+          <span class="text-[10px] text-warm-muted font-normal">(按住可上下拖曳排序)</span>
+        </h3>
+        <button @click="openAddModal" 
+                class="text-xs bg-cream-200 hover:bg-cream-300 text-warm-brown font-medium px-2.5 py-1.5 rounded-xl border border-cream-300 flex items-center gap-1 transition shadow-2xs">
+          <span>＋ 新增行程</span>
+        </button>
+      </div>
+
+      <!-- 行程卡片列表 (支援拖曳排序、導航與替換) -->
+      <div class="space-y-3">
+        <div 
+          v-for="(item, idx) in currentDay.events" 
+          :key="item.id"
+          class="drag-item bg-cream-50 p-3.5 rounded-2xl border border-cream-300 hover:border-cream-400 shadow-2xs transition-all relative flex flex-col gap-2"
+          draggable="true"
+          @dragstart="onDragStart(idx)"
+          @dragover.prevent
+          @drop="onDrop(idx)">
+
+          <div class="flex items-start justify-between">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold tracking-tight"
+                    :class="getCategoryBadgeClass(item.category)">
+                {{ item.category }}
+              </span>
+              <span class="text-xs font-semibold text-warm-muted flex items-center gap-1">
+                ⏱ {{ item.time }}
+              </span>
+            </div>
+
+            <div class="flex items-center gap-1">
+              <!-- 一鍵 Google Maps 導航按鈕 -->
+              <a :href="getGoogleMapsNavUrl(item.title)" 
+                 target="_blank"
+                 class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-warm-blue/10 hover:bg-warm-blue/20 text-warm-blue text-xs font-semibold transition shadow-2xs active:scale-95"
+                 title="開啟 Google 地圖開始導航">
+                <span>📍</span>
+                <span>導航</span>
+              </a>
+
+              <!-- 更多選單 (編輯/備用替換/刪除) -->
+              <button @click="item.showMenu = !item.showMenu" class="text-warm-muted hover:text-warm-dark p-1 rounded-lg">
+                ⋮
+              </button>
+            </div>
+          </div>
+
+          <!-- 卡片選單下拉 -->
+          <div v-if="item.showMenu" class="absolute top-10 right-3 bg-white border border-cream-300 rounded-xl shadow-lg p-1.5 z-20 flex flex-col gap-1 text-xs">
+            <button @click="editEvent(item)" class="text-left px-2 py-1 rounded hover:bg-cream-100 text-warm-brown">✏️ 編輯行程</button>
+            <button @click="openReplaceModal(item)" class="text-left px-2 py-1 rounded hover:bg-cream-100 text-warm-brown">🔄 換成備用景點</button>
+            <button @click="deleteEvent(item.id)" class="text-left px-2 py-1 rounded hover:bg-red-50 text-red-500">🗑️ 刪除行程</button>
+          </div>
+
+          <div>
+            <h4 class="text-sm font-bold text-warm-dark leading-snug">{{ item.title }}</h4>
+            <p v-if="item.note" class="text-xs text-warm-muted mt-1 leading-relaxed whitespace-pre-line bg-cream-200/50 p-2 rounded-xl">
+              {{ item.note }}
+            </p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 底部功能抽屜列 -->
+    <nav class="sticky bottom-0 z-30 bg-cream-100/95 backdrop-blur-md border-t border-cream-300 px-6 py-2.5 flex justify-around">
+      <button @click="activeModal = 'budget'" class="flex flex-col items-center gap-0.5 text-warm-brown hover:text-warm-dark transition">
+        <span class="text-xl">🪙</span>
+        <span class="text-[10px] font-bold">雙幣記帳</span>
+      </button>
+
+      <button @click="activeModal = 'backup'" class="flex flex-col items-center gap-0.5 text-warm-brown hover:text-warm-dark transition">
+        <span class="text-xl">✨</span>
+        <span class="text-[10px] font-bold">備用景點</span>
+      </button>
+
+      <button @click="activeModal = 'todo'" class="flex flex-col items-center gap-0.5 text-warm-brown hover:text-warm-dark transition">
+        <span class="text-xl">✅</span>
+        <span class="text-[10px] font-bold">代辦 TODO</span>
+      </button>
+
+      <button @click="activeModal = 'tips'" class="flex flex-col items-center gap-0.5 text-warm-brown hover:text-warm-dark transition">
+        <span class="text-xl">💡</span>
+        <span class="text-[10px] font-bold">實用 TIPS</span>
+      </button>
+    </nav>
+
+    <!-- ==================== 彈窗 1：雙幣記帳系統 ==================== -->
+    <div v-if="activeModal === 'budget'" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-end justify-center">
+      <div class="bg-cream-100 w-full max-w-md rounded-t-3xl max-h-[85vh] flex flex-col border-t border-cream-300 p-5 shadow-2xl">
+        <div class="flex justify-between items-center pb-3 border-b border-cream-300">
+          <div>
+            <h3 class="font-bold text-warm-dark text-base">🪙 旅費與記帳系統</h3>
+            <p class="text-[11px] text-warm-muted">支援日幣即時匯率換算 (匯率基準：0.215)</p>
+          </div>
+          <button @click="activeModal = null" class="text-warm-muted text-lg font-bold p-1">✕</button>
+        </div>
+
+        <div class="overflow-y-auto space-y-4 py-3 flex-1 no-scrollbar">
+          <!-- 統計看板 -->
+          <div class="grid grid-cols-2 gap-2 text-center">
+            <div class="bg-cream-50 p-3 rounded-2xl border border-cream-300">
+              <span class="text-[10px] text-warm-muted block">{{ currentDay.shortDate }} 當日支出</span>
+              <span class="text-base font-bold text-warm-dark">¥ {{ getDailyTotalJpy(currentDayIndex) }}</span>
+              <span class="text-[11px] text-warm-brown block">≈ NT$ {{ Math.round(getDailyTotalJpy(currentDayIndex) * exchangeRate) }}</span>
+            </div>
+            <div class="bg-cream-50 p-3 rounded-2xl border border-cream-300">
+              <span class="text-[10px] text-warm-muted block">4天 總計累積</span>
+              <span class="text-base font-bold text-warm-accent">¥ {{ getTotalAllJpy() }}</span>
+              <span class="text-[11px] text-warm-accent block">≈ NT$ {{ Math.round(getTotalAllJpy() * exchangeRate) }}</span>
+            </div>
+          </div>
+
+          <!-- 新增記帳表單 -->
+          <div class="bg-cream-200/60 p-3 rounded-2xl space-y-2 border border-cream-300">
+            <div class="flex gap-2">
+              <input v-model="newExpense.item" placeholder="項目名稱 (如：牛排晚餐)" class="flex-1 bg-white px-3 py-1.5 rounded-xl text-xs border border-cream-300 outline-none">
+              <select v-model="newExpense.currency" class="bg-white px-2 py-1.5 rounded-xl text-xs border border-cream-300 outline-none">
+                <option value="JPY">JPY (¥)</option>
+                <option value="TWD">TWD ($)</option>
+              </select>
+            </div>
+            <div class="flex gap-2 items-center">
+              <input v-model.number="newExpense.amount" type="number" placeholder="金額" class="flex-1 bg-white px-3 py-1.5 rounded-xl text-xs border border-cream-300 outline-none">
+              <span class="text-xs text-warm-muted">
+                {{ newExpense.currency === 'JPY' ? '≈ NT$ ' + Math.round((newExpense.amount || 0) * exchangeRate) : '≈ ¥ ' + Math.round((newExpense.amount || 0) / exchangeRate) }}
+              </span>
+              <button @click="addExpense" class="bg-warm-dark text-white px-3 py-1.5 rounded-xl text-xs font-semibold hover:bg-black transition">新增</button>
+            </div>
+          </div>
+
+          <!-- 當日支出細項清單 -->
+          <div class="space-y-1.5">
+            <h4 class="text-xs font-bold text-warm-brown">{{ currentDay.shortDate }} 支出明細</h4>
+            <div v-for="(ex, i) in currentDay.expenses" :key="i" class="flex justify-between items-center bg-cream-50 px-3 py-2 rounded-xl text-xs border border-cream-200">
+              <span class="text-warm-dark">{{ ex.item }}</span>
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-warm-brown">
+                  {{ ex.currency === 'JPY' ? '¥ ' + ex.amount : 'NT$ ' + ex.amount }}
+                </span>
+                <span class="text-[10px] text-warm-muted">
+                  ({{ ex.currency === 'JPY' ? 'NT$' + Math.round(ex.amount * exchangeRate) : '¥' + Math.round(ex.amount / exchangeRate) }})
+                </span>
+                <button @click="deleteExpense(i)" class="text-warm-muted hover:text-red-500 ml-1">✕</button>
+              </div>
+            </div>
+            <div v-if="!currentDay.expenses || currentDay.expenses.length === 0" class="text-center text-xs text-warm-muted py-2">
+              本日尚無記帳紀錄
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 彈窗 2：備用景點庫（含新點位） ==================== -->
+    <div v-if="activeModal === 'backup'" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-end justify-center">
+      <div class="bg-cream-100 w-full max-w-md rounded-t-3xl max-h-[85vh] flex flex-col border-t border-cream-300 p-5 shadow-2xl">
+        <div class="flex justify-between items-center pb-3 border-b border-cream-300">
+          <div>
+            <h3 class="font-bold text-warm-dark text-base">✨ 口袋與備用景點</h3>
+            <p class="text-[11px] text-warm-muted">可隨時加入當日行程或點擊直接導航</p>
+          </div>
+          <button @click="activeModal = null" class="text-warm-muted text-lg font-bold p-1">✕</button>
+        </div>
+
+        <div class="overflow-y-auto space-y-2.5 py-3 flex-1 no-scrollbar">
+          <div v-for="spot in backupSpots" :key="spot.name" 
+               class="bg-cream-50 p-3 rounded-2xl border border-cream-300 flex justify-between items-start gap-2">
+            <div class="flex-1">
+              <div class="flex items-center gap-1.5 mb-1">
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md" :class="getCategoryBadgeClass(spot.category)">{{ spot.category }}</span>
+                <h4 class="text-xs font-bold text-warm-dark">{{ spot.name }}</h4>
+              </div>
+              <p class="text-[11px] text-warm-muted leading-relaxed">{{ spot.desc }}</p>
+            </div>
+            <div class="flex flex-col gap-1.5 items-end flex-shrink-0">
+              <a :href="getGoogleMapsNavUrl(spot.name)" target="_blank"
+                 class="px-2 py-1 rounded-lg bg-warm-blue/10 text-warm-blue text-[11px] font-semibold hover:bg-warm-blue/20">
+                📍 導航
+              </a>
+              <button @click="addBackupToCurrentDay(spot)" 
+                      class="px-2 py-1 rounded-lg bg-warm-green/15 text-warm-green text-[11px] font-semibold hover:bg-warm-green/25">
+                ＋ 加入行程
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 彈窗 3：代辦事項 (TODO) ==================== -->
+    <div v-if="activeModal === 'todo'" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-end justify-center">
+      <div class="bg-cream-100 w-full max-w-md rounded-t-3xl max-h-[85vh] flex flex-col border-t border-cream-300 p-5 shadow-2xl">
+        <div class="flex justify-between items-center pb-3 border-b border-cream-300">
+          <h3 class="font-bold text-warm-dark text-base">✅ 行前準備與代辦清單</h3>
+          <button @click="activeModal = null" class="text-warm-muted text-lg font-bold p-1">✕</button>
+        </div>
+
+        <div class="overflow-y-auto space-y-3 py-3 flex-1 no-scrollbar">
+          <!-- 新增 TODO -->
+          <div class="flex gap-2">
+            <input v-model="newTodoText" @keyup.enter="addTodo" placeholder="新增代辦事項 (如：開通漫遊)..." 
+                   class="flex-1 bg-white px-3 py-2 rounded-xl text-xs border border-cream-300 outline-none">
+            <button @click="addTodo" class="bg-warm-dark text-white px-3 py-2 rounded-xl text-xs font-bold">新增</button>
+          </div>
+
+          <!-- 清單 -->
+          <div class="space-y-2">
+            <div v-for="(todo, idx) in todos" :key="idx" 
+                 class="flex items-center justify-between bg-cream-50 p-2.5 rounded-xl border border-cream-200">
+              <label class="flex items-center gap-2 cursor-pointer flex-1">
+                <input type="checkbox" v-model="todo.done" class="rounded accent-warm-accent">
+                <span :class="{'line-through text-warm-muted': todo.done, 'text-warm-dark': !todo.done}" class="text-xs">
+                  {{ todo.text }}
+                </span>
+              </label>
+              <button @click="todos.splice(idx, 1)" class="text-warm-muted hover:text-red-500 text-xs px-2">✕</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 彈窗 4：旅遊 TIPS ==================== -->
+    <div v-if="activeModal === 'tips'" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-end justify-center">
+      <div class="bg-cream-100 w-full max-w-md rounded-t-3xl max-h-[85vh] flex flex-col border-t border-cream-300 p-5 shadow-2xl">
+        <div class="flex justify-between items-center pb-3 border-b border-cream-300">
+          <h3 class="font-bold text-warm-dark text-base">💡 關西實用交通與旅遊 TIPS</h3>
+          <button @click="activeModal = null" class="text-warm-muted text-lg font-bold p-1">✕</button>
+        </div>
+
+        <div class="overflow-y-auto space-y-3 py-3 flex-1 no-scrollbar text-xs text-warm-brown leading-relaxed">
+          <div class="bg-cream-50 p-3 rounded-2xl border border-cream-300 space-y-1">
+            <h4 class="font-bold text-warm-dark flex items-center gap-1">🏨 住宿重要資訊</h4>
+            <p>本次全程入住：<strong>大阪阪急龍仕柏飯店 (Hotel Hankyu RESPIRE OSAKA)</strong></p>
+            <p class="text-[11px] text-warm-muted">共構於 LINKS UMEDA / 友愛德寶上方，從 JR 大阪站 3 樓連通空橋步行 3 分鐘即達。</p>
+          </div>
+
+          <div class="bg-cream-50 p-3 rounded-2xl border border-cream-300 space-y-1">
+            <h4 class="font-bold text-warm-dark flex items-center gap-1">🚆 交通必勝指南</h4>
+            <p>• 大阪前往三之宮、姬路，務必認明<strong>「新快速 (Special Rapid)」</strong>，速度最快且不加收特急費。</p>
+            <p>• HARUKA 往返關西機場抵達大阪站後，停靠在最新的<strong>「地下月台 (梅北區域)」</strong>，出站搭電梯上樓即為中央口與 LINKS 商圈。</p>
+          </div>
+
+          <div class="bg-cream-50 p-3 rounded-2xl border border-cream-300 space-y-1">
+            <h4 class="font-bold text-warm-dark flex items-center gap-1">🎢 環球影城 (USJ) 當日快訊</h4>
+            <p>• 開園通常比官網公告提早 30–45 分鐘，建議 07:15 前抵達園區門口排隊。</p>
+            <p>• 入園後請一人統一代表刷所有同行人門票，在官方 App 第一時間抽取「超級任天堂世界」整理券。</p>
+          </div>
+
+          <div class="bg-cream-50 p-3 rounded-2xl border border-cream-300 space-y-1">
+            <h4 class="font-bold text-warm-dark flex items-center gap-1">☎️ 緊急聯絡</h4>
+            <p>• 台北駐大阪經濟文化辦事處急難專線：+81-90-8794-4568</p>
+            <p>• 日本報警撥 110、救護車撥 119</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 彈窗 5：購物清單 (Shopping Wishlist) ==================== -->
+    <div v-if="activeModal === 'shopping'" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-end justify-center">
+      <div class="bg-cream-100 w-full max-w-md rounded-t-3xl max-h-[85vh] flex flex-col border-t border-cream-300 p-5 shadow-2xl">
+        <div class="flex justify-between items-center pb-3 border-b border-cream-300">
+          <div>
+            <h3 class="font-bold text-warm-dark text-base">🛍️ 待買伴手禮與願望清單</h3>
+            <p class="text-[11px] text-warm-muted">梅田百貨、元町商店街必買好物</p>
+          </div>
+          <button @click="activeModal = null" class="text-warm-muted text-lg font-bold p-1">✕</button>
+        </div>
+
+        <div class="overflow-y-auto space-y-3 py-3 flex-1 no-scrollbar">
+          <div class="flex gap-2">
+            <input v-model="newShoppingText" @keyup.enter="addShoppingItem" placeholder="新增待買物品 (如：FREUNDLIEB蝴蝶酥)..." 
+                   class="flex-1 bg-white px-3 py-2 rounded-xl text-xs border border-cream-300 outline-none">
+            <button @click="addShoppingItem" class="bg-warm-dark text-white px-3 py-2 rounded-xl text-xs font-bold">新增</button>
+          </div>
+
+          <div class="space-y-2">
+            <div v-for="(item, idx) in shoppingList" :key="idx" 
+                 class="flex items-center justify-between bg-cream-50 p-2.5 rounded-xl border border-cream-200">
+              <label class="flex items-center gap-2 cursor-pointer flex-1">
+                <input type="checkbox" v-model="item.done" class="rounded accent-warm-accent">
+                <span :class="{'line-through text-warm-muted': item.done, 'text-warm-dark': !item.done}" class="text-xs">
+                  {{ item.name }}
+                </span>
+              </label>
+              <button @click="shoppingList.splice(idx, 1)" class="text-warm-muted hover:text-red-500 text-xs px-2">✕</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 彈窗 6：編輯/新增行程 ==================== -->
+    <div v-if="editingModal" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+      <div class="bg-cream-100 w-full max-w-sm rounded-3xl p-5 border border-cream-300 shadow-2xl space-y-3">
+        <h3 class="font-bold text-warm-dark text-base">{{ formEvent.id ? '✏️ 編輯行程' : '＋ 新增行程' }}</h3>
+        
+        <div class="space-y-2 text-xs">
+          <div>
+            <label class="block text-warm-muted mb-1 font-medium">分類</label>
+            <select v-model="formEvent.category" class="w-full bg-white p-2 rounded-xl border border-cream-300 outline-none">
+              <option value="景點">景點</option>
+              <option value="美食">美食</option>
+              <option value="交通">交通</option>
+              <option value="購物">購物</option>
+              <option value="航班">航班</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-warm-muted mb-1 font-medium">時間區段</label>
+            <input v-model="formEvent.time" placeholder="例如：12:30–14:00" class="w-full bg-white p-2 rounded-xl border border-cream-300 outline-none">
+          </div>
+
+          <div>
+            <label class="block text-warm-muted mb-1 font-medium">名稱/地點</label>
+            <input v-model="formEvent.title" placeholder="輸入景點或美食名稱" class="w-full bg-white p-2 rounded-xl border border-cream-300 outline-none">
+          </div>
+
+          <div>
+            <label class="block text-warm-muted mb-1 font-medium">詳細備註與攻略</label>
+            <textarea v-model="formEvent.note" rows="3" placeholder="交通指引、餐點推薦..." class="w-full bg-white p-2 rounded-xl border border-cream-300 outline-none"></textarea>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button @click="editingModal = false" class="px-3 py-1.5 rounded-xl bg-cream-200 text-warm-brown text-xs font-medium">取消</button>
+          <button @click="saveEvent" class="px-4 py-1.5 rounded-xl bg-warm-dark text-white text-xs font-bold">儲存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 彈窗 7：替換成備用景點 ==================== -->
+    <div v-if="replacingTarget" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+      <div class="bg-cream-100 w-full max-w-sm rounded-3xl p-5 border border-cream-300 shadow-2xl space-y-3">
+        <h3 class="font-bold text-warm-dark text-sm">選擇要替換「{{ replacingTarget.title }}」的景點：</h3>
+        <div class="max-h-60 overflow-y-auto space-y-2 no-scrollbar">
+          <div v-for="spot in backupSpots" :key="spot.name" 
+               @click="confirmReplace(spot)"
+               class="p-2.5 bg-cream-50 hover:bg-cream-200 rounded-xl border border-cream-300 cursor-pointer transition">
+            <div class="text-xs font-bold text-warm-dark">{{ spot.name }} ({{ spot.category }})</div>
+            <div class="text-[10px] text-warm-muted line-clamp-1">{{ spot.desc }}</div>
+          </div>
+        </div>
+        <button @click="replacingTarget = null" class="w-full py-2 bg-cream-200 rounded-xl text-xs font-semibold text-warm-brown">取消</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const { createApp, ref, computed, watch, onMounted } = Vue;
+
+    createApp({
+      setup() {
+        const HOTEL_NAME = "Hotel Hankyu RESPIRE OSAKA";
+        const exchangeRate = ref(0.215); // 日幣換台幣參考匯率
+
+        // 預設行程內容
+        const defaultDays = [
+          {
+            dayCode: 'DAY 1',
+            date: '2026-11-14',
+            shortDate: '11/14',
+            weekday: '週六',
+            city: '大阪梅田・神戶山手',
+            title: '抵達關西・梅田午餐・神戶山手異國散策與人氣牛料理',
+            weather: { icon: '🌤️', temp: '16°C', desc: '秋高氣爽' },
+            expenses: [
+              { item: 'HARUKA 與周遊券', amount: 5600, currency: 'JPY' },
+              { item: '利久牛舌午餐', amount: 2800, currency: 'JPY' }
+            ],
+            events: [
+              { id: 101, category: '航班', time: '10:25–11:45', title: '關西機場 第一航廈 (KIX)', note: '班機降落，辦理通關入境與提領行李，至 JR 綠色自動售票機兌換 HARUKA 票券及鐵路周遊券。', showMenu: false },
+              { id: 102, category: '交通', time: '11:45–12:40', title: 'JR 關西機場站 ➔ JR 大阪站', note: '搭乘關空特急 HARUKA 直達大阪站地下月台（車程約 47 分鐘）。', showMenu: false },
+              { id: 103, category: '美食', time: '12:45–14:15', title: '大阪阪急龍仕柏飯店 Check-in / LINKS UMEDA 午餐', note: '於飯店寄放行李；在 LINKS UMEDA 或 LUCUA 地下美食街享用午餐（推薦利久牛舌或極味屋漢堡排）。', showMenu: false },
+              { id: 104, category: '交通', time: '14:20–14:50', title: 'JR 大阪站 ➔ JR 三之宮站', note: '自大阪站搭乘「JR 神戶線・新快速」直達三之宮（車程僅 22 分鐘）。', showMenu: false },
+              { id: 105, category: '景點', time: '15:00–18:00', title: '北野異人館街 (Kobe Kitano Ijinkan-Gai)', note: '漫步風見雞館、萌黃之館、星巴克北野物語館；於神戶六甲牧場品嚐特選濃醇生乳霜淇淋。', showMenu: false },
+              { id: 106, category: '美食', time: '18:15–20:00', title: 'Red Rock 三宮東口店 (烤牛肉丼)', note: '品嚐高人氣層層堆疊招牌烤牛肉丼或黑毛和牛牛排丼。', showMenu: false },
+              { id: 107, category: '交通', time: '20:15–20:45', title: 'JR 三之宮站 ➔ JR 大阪站 (返回飯店)', note: '搭乘新快速電車返回梅田，步行回大阪阪急龍仕柏飯店休息。', showMenu: false }
+            ]
+          },
+          {
+            dayCode: 'DAY 2',
+            date: '2026-11-15',
+            shortDate: '11/15',
+            weekday: '週日',
+            city: '姬路・神戶元町',
+            title: '世界遺產姬路城・教堂早午餐・排隊麵包與頂級神戶牛排',
+            weather: { icon: '⛅', temp: '15°C', desc: '晴時多雲' },
+            expenses: [
+              { item: '姬路城門票', amount: 1000, currency: 'JPY' },
+              { item: 'Mouriya 神戶牛排晚宴', amount: 32000, currency: 'JPY' }
+            ],
+            events: [
+              { id: 201, category: '交通', time: '08:00–09:15', title: 'JR 大阪站 ➔ JR 姬路站', note: '搭乘 JR 神戶線新快速（姬路行）直達姬路站（車程約 62 分鐘）。', showMenu: false },
+              { id: 202, category: '景點', time: '09:30–12:00', title: '姬路城 (白鷺城) & 好古園', note: '走訪日本第一名城登上大天守閣，隨後參訪秋意典雅的庭園好古園。', showMenu: false },
+              { id: 203, category: '交通', time: '12:15–13:00', title: 'JR 姬路站 ➔ JR 三之宮站', note: '搭乘 JR 新快速前往三之宮（車程約 40 分鐘）。', showMenu: false },
+              { id: 204, category: '美食', time: '13:15–14:30', title: 'FREUNDLIEB 本店 (舊教堂咖啡午餐)', note: '在歷史悠久的教堂穹頂下品嚐招牌烘烤三明治、冰滴咖啡與手工蝴蝶酥。', showMenu: false },
+              { id: 205, category: '美食', time: '14:45–16:00', title: 'Bakery RIKI (元町人氣麵包)', note: '排隊選購現烤限量酥皮可頌與水果丹麥酥，漫步元町商店街。', showMenu: false },
+              { id: 206, category: '景點', time: '16:15–17:30', title: 'cafe & bar anthem (海岸通老屋閣樓)', note: '品嚐棉紗布手作生乳酪蛋糕，享受港町午後時光。', showMenu: false },
+              { id: 207, category: '美食', time: '18:00–20:00', title: 'Mouriya (モーリヤ) 神戶牛排', note: '預約品嚐頂級但馬牛與神戶牛鐵板燒晚宴。', showMenu: false },
+              { id: 208, category: '美食', time: '20:15–21:15', title: '鯛白湯らーめん ○de▽ (三宮鯛魚拉麵)', note: '品嚐鮮甜天然真鯛清湯拉麵作為宵夜，隨後搭車回梅田飯店。', showMenu: false }
+            ]
+          },
+          {
+            dayCode: 'DAY 3',
+            date: '2026-11-16',
+            shortDate: '11/16',
+            weekday: '週一',
+            city: '大阪此花區 (USJ)',
+            title: '避開週末最高峰！日本環球影城（USJ）全日暢玩',
+            weather: { icon: '☀️', temp: '17°C', desc: '陽光普照' },
+            expenses: [
+              { item: 'USJ 園區餐飲與爆米花桶', amount: 6500, currency: 'JPY' }
+            ],
+            events: [
+              { id: 301, category: '交通', time: '07:15–08:15', title: 'JR 大阪站 ➔ 環球影城 Universal City 站', note: '搭環狀線至西九條轉夢咲線（約 15 分鐘），提早抵達排隊等待提早入園。', showMenu: false },
+              { id: 302, category: '景點', time: '08:30–12:30', title: '超級任天堂世界 & 哈利波特魔法世界', note: '入園立即開 App 抽取任天堂整理券，體驗瑪利歐賽車、禁忌之旅。', showMenu: false },
+              { id: 303, category: '景點', time: '12:30–17:30', title: '熱門遊樂設施與午後大遊行', note: '挑戰飛天翼龍、小小兵瘋狂乘車遊、好萊塢美夢乘車遊。', showMenu: false },
+              { id: 304, category: '美食', time: '18:00–21:00', title: '梅田商圈宵夜居酒屋', note: '搭車返回梅田，在飯店周邊享用燒肉或居酒屋料理，回阪急龍仕柏放鬆休足。', showMenu: false }
+            ]
+          },
+          {
+            dayCode: 'DAY 4',
+            date: '2026-11-17',
+            shortDate: '11/17',
+            weekday: '週二',
+            city: '梅田・關西機場',
+            title: '梅田最後免稅補貨・啟程前往機場返台',
+            weather: { icon: '🌤️', temp: '16°C', desc: '舒適微涼' },
+            expenses: [
+              { item: '梅田伴手禮與免稅藥妝', amount: 18000, currency: 'JPY' }
+            ],
+            events: [
+              { id: 401, category: '購物', time: '09:30–11:30', title: '梅田百貨商圈免稅採買', note: '於 LUCUA 1100、阪急百貨、友愛德寶 LINKS UMEDA 補齊伴手禮與藥妝。', showMenu: false },
+              { id: 402, category: '美食', time: '11:30–13:00', title: '梅田地下街道地午餐', note: '享用大阪燒、炸串或鰻魚飯定食。', showMenu: false },
+              { id: 403, category: '其他', time: '13:00–14:45', title: '回阪急龍仕柏飯店提領行李', note: '完成打包，稍作歇息。', showMenu: false },
+              { id: 404, category: '交通', time: '15:15–16:15', title: 'JR 大阪站地下月台 ➔ 關西機場 (HARUKA)', note: '搭乘特急 HARUKA 直達關西機場第一航廈（車程 47 分鐘）。', showMenu: false },
+              { id: 405, category: '航班', time: '16:30–18:55', title: '關西機場出境手續 & 登機返台', note: '虎航櫃台報到、行李托運、安檢、免稅店最後採購，搭乘 18:55 班機回國。', showMenu: false }
+            ]
+          }
+        ];
+
+        // 擴充後備用景點清單 (含指定新增項目)
+        const backupSpots = ref([
+          { name: '神戶牛排 Steak Land', category: '美食', desc: '三宮平價人氣鐵板燒，午間套餐 CP 值極高，大份量牛排現煎滋滋作響。' },
+          { name: '味乃家 大阪燒', category: '美食', desc: '難波道頓堀米其林推薦排隊名店，高麗菜絲鬆軟清甜，招牌綜合大阪燒口感極佳。' },
+          { name: '神戶觀音屋 起司蛋糕（喫茶店）', category: '美食', desc: '神戶經典人氣喫茶老店，招牌熱烤丹麥起司蛋糕，融化微鹹起司包裹著海綿蛋糕。' },
+          { name: '玉出超市', category: '購物', desc: '大阪在地知名平價超市，招牌鮮黃亮麗，熟食、生鮮與飲料零食價格極具競爭力。' },
+          { name: '神戶港塔 (Kobe Port Tower)', category: '景點', desc: '紅色的雙曲面港灣地標，可俯瞰神戶港與美利堅公園無敵夕陽與海景夜色。' },
+          { name: '長田本庄軒炒麵', category: '美食', desc: '神戶庶民靈魂料理「Bokkake 牛筋蒟蒻炒麵」，自家製粗麵條裹著甘甜牛筋醬汁香氣四溢。' },
+          { name: '森谷商店可樂餅', category: '美食', desc: '元町商店街入口老字號肉舖，排隊現炸牛肉可樂餅金黃酥脆、內餡馬鈴薯香濃燙口。' },
+          { name: '生田神社', category: '景點', desc: '三宮鬧區中的千年古社，祈求良緣與健康的知名能量景點。' },
+          { name: 'Blue Bottle Coffee 神戶阪急店', category: '美食', desc: '採光舒適的日系藍瓶咖啡，適合逛街走累時品嚐手沖單品歇歇腿。' },
+          { name: '友愛德寶 (Yodobashi Camera 梅田)', category: '購物', desc: '就在飯店樓下，全日本最大規模電器、模型玩具與相機大本營。' }
+        ]);
+
+        // 代辦事項清單
+        const defaultTodos = [
+          { text: '確認 Visit Japan Web (VJW) 申報 QR Code 截圖', done: false },
+          { text: '列印或下載 HARUKA 與周遊券憑證', done: false },
+          { text: '確認 USJ 官方 App 門票已登錄綁定', done: false },
+          { text: '準備護照正本、國際信用卡與日幣現鈔', done: false },
+          { text: '開通手機 eSIM / 原號漫遊網路', done: false }
+        ];
+
+        // 待買願望清單
+        const defaultShopping = [
+          { name: 'FREUNDLIEB 手工教堂蝴蝶酥', done: false },
+          { name: '北野六甲牧場起司與牛奶餅乾', done: false },
+          { name: '合利他命 EX Plus / 胃腸藥 (梅田藥妝)', done: false },
+          { name: 'USJ 瑪利歐賽車爆米花桶 / 無敵星吊飾', done: false }
+        ];
+
+        // 響應式資料與快照讀取
+        const days = ref(JSON.parse(localStorage.getItem('kansai_days')) || defaultDays);
+        const todos = ref(JSON.parse(localStorage.getItem('kansai_todos')) || defaultTodos);
+        const shoppingList = ref(JSON.parse(localStorage.getItem('kansai_shopping')) || defaultShopping);
+
+        const currentDayIndex = ref(0);
+        const activeModal = ref(null); // 'budget', 'backup', 'todo', 'tips', 'shopping'
+        const editingModal = ref(false);
+        const replacingTarget = ref(null);
+
+        const formEvent = ref({ id: null, category: '景點', time: '', title: '', note: '', showMenu: false });
+        const newExpense = ref({ item: '', amount: null, currency: 'JPY' });
+        const newTodoText = ref('');
+        const newShoppingText = ref('');
+        let dragSourceIndex = null;
+
+        const currentDay = computed(() => days.value[currentDayIndex.value]);
+
+        // 持久化儲存
+        watch(days, (val) => localStorage.setItem('kansai_days', JSON.stringify(val)), { deep: true });
+        watch(todos, (val) => localStorage.setItem('kansai_todos', JSON.stringify(val)), { deep: true });
+        watch(shoppingList, (val) => localStorage.setItem('kansai_shopping', JSON.stringify(val)), { deep: true });
+
+        // 一鍵導航至 Google Maps
+        const getGoogleMapsNavUrl = (placeName) => {
+          return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(placeName)}`;
+        };
+
+        // 一鍵導航回飯店
+        const navigateHotel = () => {
+          window.open(getGoogleMapsNavUrl(HOTEL_NAME), '_blank');
+        };
+
+        // 標籤顏色
+        const getCategoryBadgeClass = (category) => {
+          switch (category) {
+            case '美食': return 'bg-amber-100 text-amber-800 border border-amber-200';
+            case '交通': return 'bg-blue-100 text-blue-800 border border-blue-200';
+            case '景點': return 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+            case '購物': return 'bg-rose-100 text-rose-800 border border-rose-200';
+            case '航班': return 'bg-purple-100 text-purple-800 border border-purple-200';
+            default: return 'bg-stone-100 text-stone-800 border border-stone-200';
+          }
+        };
+
+        // 拖曳排序
+        const onDragStart = (idx) => {
+          dragSourceIndex = idx;
+        };
+        const onDrop = (dropIndex) => {
+          if (dragSourceIndex === null || dragSourceIndex === dropIndex) return;
+          const list = currentDay.value.events;
+          const movedItem = list.splice(dragSourceIndex, 1)[0];
+          list.splice(dropIndex, 0, movedItem);
+          dragSourceIndex = null;
+        };
+
+        // 新增 / 編輯行程
+        const openAddModal = () => {
+          formEvent.value = { id: null, category: '景點', time: '', title: '', note: '', showMenu: false };
+          editingModal.value = true;
+        };
+        const editEvent = (item) => {
+          item.showMenu = false;
+          formEvent.value = { ...item };
+          editingModal.value = true;
+        };
+        const saveEvent = () => {
+          if (!formEvent.value.title) return;
+          if (formEvent.value.id) {
+            const idx = currentDay.value.events.findIndex(e => e.id === formEvent.value.id);
+            if (idx !== -1) currentDay.value.events[idx] = { ...formEvent.value };
+          } else {
+            currentDay.value.events.push({
+              id: Date.now(),
+              ...formEvent.value
+            });
+          }
+          editingModal.value = false;
+        };
+        const deleteEvent = (id) => {
+          currentDay.value.events = currentDay.value.events.filter(e => e.id !== id);
+        };
+
+        // 替換景點
+        const openReplaceModal = (item) => {
+          item.showMenu = false;
+          replacingTarget.value = item;
+        };
+        const confirmReplace = (spot) => {
+          if (replacingTarget.value) {
+            replacingTarget.value.title = spot.name;
+            replacingTarget.value.category = spot.category;
+            replacingTarget.value.note = spot.desc;
+          }
+          replacingTarget.value = null;
+        };
+        const addBackupToCurrentDay = (spot) => {
+          currentDay.value.events.push({
+            id: Date.now(),
+            category: spot.category,
+            time: '彈性安排',
+            title: spot.name,
+            note: spot.desc,
+            showMenu: false
+          });
+          activeModal.value = null;
+        };
+
+        // 記帳計算
+        const addExpense = () => {
+          if (!newExpense.value.item || !newExpense.value.amount) return;
+          if (!currentDay.value.expenses) currentDay.value.expenses = [];
+          currentDay.value.expenses.push({ ...newExpense.value });
+          newExpense.value = { item: '', amount: null, currency: 'JPY' };
+        };
+        const deleteExpense = (idx) => {
+          currentDay.value.expenses.splice(idx, 1);
+        };
+        const getDailyTotalJpy = (dayIdx) => {
+          const exList = days.value[dayIdx]?.expenses || [];
+          return exList.reduce((acc, cur) => {
+            if (cur.currency === 'JPY') return acc + cur.amount;
+            return acc + Math.round(cur.amount / exchangeRate.value);
+          }, 0);
+        };
+        const getTotalAllJpy = () => {
+          return days.value.reduce((acc, _, idx) => acc + getDailyTotalJpy(idx), 0);
+        };
+
+        // TODO & 購物清單
+        const addTodo = () => {
+          if (!newTodoText.value.trim()) return;
+          todos.value.push({ text: newTodoText.value.trim(), done: false });
+          newTodoText.value = '';
+        };
+        const addShoppingItem = () => {
+          if (!newShoppingText.value.trim()) return;
+          shoppingList.value.push({ name: newShoppingText.value.trim(), done: false });
+          newShoppingText.value = '';
+        };
+
+        // 一鍵還原
+        const resetToDefault = () => {
+          if (confirm('確定要還原成初始預設的行程與備忘錄嗎？')) {
+            localStorage.clear();
+            days.value = JSON.parse(JSON.stringify(defaultDays));
+            todos.value = JSON.parse(JSON.stringify(defaultTodos));
+            shoppingList.value = JSON.parse(JSON.stringify(defaultShopping));
+          }
+        };
+
+        return {
+          HOTEL_NAME,
+          days,
+          currentDayIndex,
+          currentDay,
+          activeModal,
+          editingModal,
+          replacingTarget,
+          formEvent,
+          newExpense,
+          newTodoText,
+          newShoppingText,
+          todos,
+          shoppingList,
+          backupSpots,
+          exchangeRate,
+          getGoogleMapsNavUrl,
+          navigateHotel,
+          getCategoryBadgeClass,
+          onDragStart,
+          onDrop,
+          openAddModal,
+          editEvent,
+          saveEvent,
+          deleteEvent,
+          openReplaceModal,
+          confirmReplace,
+          addBackupToCurrentDay,
+          addExpense,
+          deleteExpense,
+          getDailyTotalJpy,
+          getTotalAllJpy,
+          addTodo,
+          addShoppingItem,
+          resetToDefault
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
